@@ -1,4 +1,4 @@
-# Company Information Extractor
+# Company Detail Scraper
 
 A Streamlit application that extracts company names from PDF documents, retrieves contact details via Google Maps API, and scrapes emails from company websites.
 
