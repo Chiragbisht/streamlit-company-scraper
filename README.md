@@ -22,8 +22,9 @@ A Streamlit application that extracts company names from PDF documents, retrieve
 
 1. Clone this repository:
    ```
-   git clone <repository-url>
-   cd <repository-directory>
+   git clone https://github.com/Chiragbisht/streamlit-company-scraper.git
+   cd streamlit-company-scraper
+   
    ```
 
 2. Install required packages:
