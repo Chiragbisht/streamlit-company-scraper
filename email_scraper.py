@@ -6,13 +6,31 @@ from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 import re
 import concurrent.futures
+import os
+import platform
 
 def setup_driver():
     # Setup Selenium with Chrome options
     options = webdriver.ChromeOptions()
     options.add_argument("--headless")  # Run Chrome in headless mode (without GUI)
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-    return driver
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    
+    # Check if running on Streamlit Cloud (Linux-based environment)
+    if platform.system() == 'Linux' and os.path.exists('/home/appuser'):
+        # Streamlit Cloud configuration
+        try:
+            # Use system Chromium browser and driver on Streamlit Cloud
+            return webdriver.Chrome(
+                service=Service("/usr/bin/chromedriver"),
+                options=options
+            )
+        except Exception as e:
+            print(f"Failed to use system chromedriver: {e}")
+            # Fall back to normal setup
+    
+    # Default for local environment or fallback
+    return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
 def scrape_emails_with_selenium(url):
     driver = setup_driver()  # Initialize the WebDriver for each URL
