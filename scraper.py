@@ -7,6 +7,10 @@ import importlib.util
 import json
 import hashlib
 import re
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Function to check and install required packages
 def install_required_packages():
@@ -34,7 +38,7 @@ from pypdf import PdfReader
 from PIL import Image
 
 # Set up the API key
-API_KEY = "AIzaSyBqBw2a7_rRzrw6V8f-abFsxULTREqCmN4"
+API_KEY = os.getenv("GEMINI_API_KEY")
 genai.configure(api_key=API_KEY)
 
 # Cache file to store extracted company names to ensure consistency

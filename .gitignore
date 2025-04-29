@@ -1,0 +1,30 @@
+# Environment variables
+.env
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Cache files
+text_cache.json
+company_cache.json
+
+# CSV output files
+*.csv
+
+# Log files
+*.log 
