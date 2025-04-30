@@ -21,6 +21,7 @@ def setup_driver():
         # Streamlit Cloud configuration
         try:
             # Use system Chromium browser and driver on Streamlit Cloud
+            options.binary_location = "/usr/bin/chromium"
             return webdriver.Chrome(
                 service=Service("/usr/bin/chromedriver"),
                 options=options
@@ -32,7 +33,16 @@ def setup_driver():
     # Default for local environment or fallback
     return webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
-def scrape_emails_with_selenium(url):
+def scrape_emails_from_url(url):
+    """
+    Scrape emails from a single URL
+    
+    Args:
+        url (str): URL to scrape
+        
+    Returns:
+        list: List of email addresses found
+    """
     driver = setup_driver()  # Initialize the WebDriver for each URL
     try:
         driver.get(url)
@@ -61,12 +71,27 @@ def scrape_emails_with_selenium(url):
     finally:
         driver.quit()  # Quit the driver after scraping the page
     
-def scrape_emails_from_multiple_urls(urls):
+def scrape_emails_with_selenium(urls_or_url):
+    """
+    Scrape emails from one or multiple URLs
+    
+    Args:
+        urls_or_url (str or list): Single URL string or list of URLs
+        
+    Returns:
+        dict or list: Dictionary mapping URLs to emails if input is a list,
+                     or list of emails if input is a single URL
+    """
+    # Handle case where urls_or_url is a single string (URL)
+    if isinstance(urls_or_url, str):
+        return scrape_emails_from_url(urls_or_url)
+    
+    # Handle case where urls_or_url is a list of URLs
     all_emails = {}
     
     # Use ThreadPoolExecutor to handle URLs concurrently, but create a new driver for each URL
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        future_to_url = {executor.submit(scrape_emails_with_selenium, url): url for url in urls}
+        future_to_url = {executor.submit(scrape_emails_from_url, url): url for url in urls_or_url}
         
         for future in concurrent.futures.as_completed(future_to_url):
             url = future_to_url[future]
@@ -75,9 +100,10 @@ def scrape_emails_from_multiple_urls(urls):
                 if emails:
                     all_emails[url] = emails
                 else:
-                    all_emails[url] = "No emails found"
+                    all_emails[url] = []
             except Exception as e:
-                all_emails[url] = f"Error: {e}"
+                print(f"Error processing {url}: {e}")
+                all_emails[url] = []
 
     return all_emails
 
@@ -90,12 +116,12 @@ if __name__ == "__main__":
         "https://www.ap.com/"
     ]
     
-    email_results = scrape_emails_from_multiple_urls(target_urls)
+    email_results = scrape_emails_with_selenium(target_urls)
     
     for url, emails in email_results.items():
         print(f"Emails found on {url}:")
         if isinstance(emails, list):
             for email in emails:
-                print(email)
+                print(f"  - {email}")
         else:
             print(emails) 

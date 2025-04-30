@@ -2,10 +2,12 @@ import streamlit as st
 import os
 import pandas as pd
 import tempfile
+import traceback
 from dotenv import load_dotenv
 from scraper import extract_text_from_pdf, extract_company_names, save_to_csv, load_text_cache, save_text_cache
 from google_maps_scraper import get_company_details, save_company_details_to_csv
 from email_scraper import scrape_emails_with_selenium
+from mongodb_utils import save_companies_to_mongodb, save_company_details_to_mongodb, register_user, get_user_extractions
 
 # Load environment variables
 load_dotenv()
@@ -13,8 +15,185 @@ load_dotenv()
 def main():
     st.set_page_config(page_title="Company Name Extractor", page_icon="📄")
     
+    # Initialize sidebar navigation
+    if 'current_page' not in st.session_state:
+        st.session_state.current_page = "home"
+    
+    # Ask for user information first
+    if 'user_name' not in st.session_state:
+        st.title("Welcome to Company Name Extractor")
+        st.markdown("Please enter your information to begin")
+        
+        with st.form("user_registration_form"):
+            user_name = st.text_input("Your Name")
+            email = st.text_input("Your Email (optional)")
+            
+            submitted = st.form_submit_button("Continue")
+            if submitted and user_name:
+                # Register user in MongoDB
+                try:
+                    user_id = register_user(user_name, email)
+                    if user_id:
+                        st.success(f"Welcome, {user_name}!")
+                        st.session_state.user_name = user_name
+                        st.session_state.user_email = email
+                        st.session_state.user_id = user_id
+                    else:
+                        st.error("Failed to register user. Please try again.")
+                except Exception as e:
+                    st.error(f"Error registering user: {e}")
+                    
+                # We'll rerun to refresh the page after registration
+                if 'user_name' in st.session_state:
+                    st.rerun()
+        return
+    
+    # Add sidebar navigation
+    with st.sidebar:
+        st.title(f"Hello, {st.session_state.user_name}")
+        
+        st.radio(
+            "Navigation",
+            ["Home", "My Extractions", "User Profile"],
+            key="nav_selection",
+            on_change=change_page
+        )
+
+    # Display the selected page
+    if st.session_state.current_page == "home":
+        display_home_page()
+    elif st.session_state.current_page == "extractions":
+        display_extractions_page()
+    elif st.session_state.current_page == "profile":
+        display_profile_page()
+
+def change_page():
+    """Change the current page based on navigation selection"""
+    selection = st.session_state.nav_selection.lower().replace(" ", "_")
+    
+    # Map navigation options to page names
+    page_mapping = {
+        "home": "home",
+        "my_extractions": "extractions",
+        "user_profile": "profile"
+    }
+    
+    st.session_state.current_page = page_mapping.get(selection, "home")
+
+def display_profile_page():
+    """Display user profile page"""
+    st.title("User Profile")
+    
+    # Display current user information
+    st.subheader("Your Information")
+    
+    user_name = st.session_state.user_name
+    user_email = st.session_state.get("user_email", "")
+    
+    with st.form("update_profile_form"):
+        updated_name = st.text_input("Name", value=user_name)
+        updated_email = st.text_input("Email", value=user_email)
+        
+        submitted = st.form_submit_button("Update Profile")
+        if submitted:
+            # Update user in MongoDB
+            try:
+                user_id = register_user(updated_name, updated_email)
+                if user_id:
+                    st.success("Profile updated successfully!")
+                    st.session_state.user_name = updated_name
+                    st.session_state.user_email = updated_email
+                    st.session_state.user_id = user_id
+                    st.rerun()
+                else:
+                    st.error("Failed to update profile. Please try again.")
+            except Exception as e:
+                st.error(f"Error updating profile: {e}")
+
+def display_extractions_page():
+    """Display user extractions page"""
+    st.title("My Extractions")
+    
+    # Get user extractions from MongoDB
+    try:
+        extractions = get_user_extractions(st.session_state.user_name)
+        
+        if extractions:
+            companies = extractions.get("companies", [])
+            company_details = extractions.get("company_details", [])
+            
+            # Display extraction statistics
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Company Names Extracted", len(companies))
+            with col2:
+                st.metric("Company Details Extracted", len(company_details))
+            
+            # Display extractions in tabs
+            tab1, tab2 = st.tabs(["Company Names", "Company Details"])
+            
+            with tab1:
+                if companies:
+                    # Create DataFrame for display
+                    companies_df = pd.DataFrame([
+                        {
+                            "Company Name": doc["company_name"],
+                            "Source": doc.get("source_pdf", ""),
+                            "Date": doc.get("created_at", "")
+                        } for doc in companies
+                    ])
+                    
+                    st.dataframe(companies_df, use_container_width=True)
+                    
+                    # Download as CSV option
+                    if st.button("Download Company Names as CSV"):
+                        csv = companies_df.to_csv(index=False)
+                        st.download_button(
+                            label="Click to Download",
+                            data=csv,
+                            file_name="my_extracted_companies.csv",
+                            mime="text/csv"
+                        )
+                else:
+                    st.info("You haven't extracted any company names yet.")
+            
+            with tab2:
+                if company_details:
+                    # Create DataFrame for display
+                    details_df = pd.DataFrame([
+                        {
+                            "Company Name": doc["company_name"],
+                            "Emails": "; ".join(doc.get("emails", [])),
+                            "Phones": "; ".join(doc.get("phones", [])),
+                            "Website": doc.get("website", ""),
+                            "Date": doc.get("created_at", "")
+                        } for doc in company_details
+                    ])
+                    
+                    st.dataframe(details_df, use_container_width=True)
+                    
+                    # Download as CSV option
+                    if st.button("Download Company Details as CSV"):
+                        csv = details_df.to_csv(index=False)
+                        st.download_button(
+                            label="Click to Download",
+                            data=csv,
+                            file_name="my_company_details.csv",
+                            mime="text/csv"
+                        )
+                else:
+                    st.info("You haven't extracted any company details yet.")
+        else:
+            st.info("You don't have any extractions yet. Start by extracting company names from PDFs.")
+    except Exception as e:
+        st.error(f"Error retrieving your extractions: {e}")
+        st.error(traceback.format_exc())
+
+def display_home_page():
+    """Display the main extraction page"""
+    # The main app functionality starts here
     st.title("PDF Company Name Extractor")
-    st.markdown("Upload up to 10 PDF files to extract company names")
+    st.markdown(f"Upload up to 10 PDF files to extract company names")
     
     # Create a temporary directory to store uploaded files
     temp_dir = tempfile.mkdtemp()
@@ -130,6 +309,21 @@ def main():
                 # Store CSV path in session state
                 st.session_state.companies_csv_path = csv_path
                 
+                # Automatically save to MongoDB when CSV is created
+                with st.spinner("Saving company names to MongoDB..."):
+                    try:
+                        success = save_companies_to_mongodb(
+                            st.session_state.companies_csv_path,
+                            st.session_state.user_name
+                        )
+                        if success:
+                            st.success("Company names automatically saved to MongoDB!")
+                        else:
+                            st.error("Failed to save to MongoDB. Check the logs for more details.")
+                    except Exception as e:
+                        error_details = traceback.format_exc()
+                        st.error(f"Error saving to MongoDB: {e}\n\nDetails: {error_details}")
+                
                 # Display aggregated results in tabs
                 st.subheader("Extracted Company Names:")
                 
@@ -153,7 +347,8 @@ def main():
                             file_name="company_list.csv",
                             mime="text/csv"
                         )
-
+                    
+                    # Remove separate MongoDB save button since we auto-save now
                     # Button to view in preview mode
                     if st.button("Edit Company Names"):
                         st.session_state.view_mode = "preview"
@@ -217,6 +412,21 @@ def main():
                 st.session_state.companies_csv_path = csv_path
                 
                 st.success("Changes saved successfully!")
+                
+                # Automatically save to MongoDB when CSV is created
+                with st.spinner("Saving updated company names to MongoDB..."):
+                    try:
+                        success = save_companies_to_mongodb(
+                            st.session_state.companies_csv_path,
+                            st.session_state.user_name
+                        )
+                        if success:
+                            st.success("Updated company names automatically saved to MongoDB!")
+                        else:
+                            st.error("Failed to save to MongoDB. Check the logs for more details.")
+                    except Exception as e:
+                        error_details = traceback.format_exc()
+                        st.error(f"Error saving to MongoDB: {e}\n\nDetails: {error_details}")
                 
             # Download button
             if st.session_state.companies_csv_path:
@@ -392,6 +602,21 @@ def main():
                 
                 # Store the CSV path in session state
                 st.session_state.details_csv_path = details_csv_path
+                
+                # Automatically save company details to MongoDB
+                with st.spinner("Saving company details to MongoDB..."):
+                    try:
+                        success = save_company_details_to_mongodb(
+                            details_csv_path,
+                            st.session_state.user_name
+                        )
+                        if success:
+                            st.success("Company details automatically saved to MongoDB!")
+                        else:
+                            st.error("Failed to save details to MongoDB. Check the logs for more details.")
+                    except Exception as e:
+                        error_details = traceback.format_exc()
+                        st.error(f"Error saving details to MongoDB: {e}\n\nDetails: {error_details}")
                 
                 # Provide download button below results
                 with open(details_csv_path, "r", encoding='utf-8') as file:
