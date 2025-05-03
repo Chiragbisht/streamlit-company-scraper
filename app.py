@@ -15,7 +15,7 @@ load_dotenv()
 def main():
     st.set_page_config(page_title="Company Name Extractor", page_icon="📄")
     
-    # Initialize sidebar navigation
+    # Initialize session state
     if 'current_page' not in st.session_state:
         st.session_state.current_page = "home"
     
@@ -26,17 +26,16 @@ def main():
         
         with st.form("user_registration_form"):
             user_name = st.text_input("Your Name")
-            email = st.text_input("Your Email (optional)")
             
             submitted = st.form_submit_button("Continue")
             if submitted and user_name:
                 # Register user in MongoDB
                 try:
-                    user_id = register_user(user_name, email)
+                    user_id = register_user(user_name, "")
                     if user_id:
                         st.success(f"Welcome, {user_name}!")
                         st.session_state.user_name = user_name
-                        st.session_state.user_email = email
+                        st.session_state.user_email = ""
                         st.session_state.user_id = user_id
                     else:
                         st.error("Failed to register user. Please try again.")
@@ -48,146 +47,8 @@ def main():
                     st.rerun()
         return
     
-    # Add sidebar navigation
-    with st.sidebar:
-        st.title(f"Hello, {st.session_state.user_name}")
-        
-        st.radio(
-            "Navigation",
-            ["Home", "My Extractions", "User Profile"],
-            key="nav_selection",
-            on_change=change_page
-        )
-
-    # Display the selected page
-    if st.session_state.current_page == "home":
-        display_home_page()
-    elif st.session_state.current_page == "extractions":
-        display_extractions_page()
-    elif st.session_state.current_page == "profile":
-        display_profile_page()
-
-def change_page():
-    """Change the current page based on navigation selection"""
-    selection = st.session_state.nav_selection.lower().replace(" ", "_")
-    
-    # Map navigation options to page names
-    page_mapping = {
-        "home": "home",
-        "my_extractions": "extractions",
-        "user_profile": "profile"
-    }
-    
-    st.session_state.current_page = page_mapping.get(selection, "home")
-
-def display_profile_page():
-    """Display user profile page"""
-    st.title("User Profile")
-    
-    # Display current user information
-    st.subheader("Your Information")
-    
-    user_name = st.session_state.user_name
-    user_email = st.session_state.get("user_email", "")
-    
-    with st.form("update_profile_form"):
-        updated_name = st.text_input("Name", value=user_name)
-        updated_email = st.text_input("Email", value=user_email)
-        
-        submitted = st.form_submit_button("Update Profile")
-        if submitted:
-            # Update user in MongoDB
-            try:
-                user_id = register_user(updated_name, updated_email)
-                if user_id:
-                    st.success("Profile updated successfully!")
-                    st.session_state.user_name = updated_name
-                    st.session_state.user_email = updated_email
-                    st.session_state.user_id = user_id
-                    st.rerun()
-                else:
-                    st.error("Failed to update profile. Please try again.")
-            except Exception as e:
-                st.error(f"Error updating profile: {e}")
-
-def display_extractions_page():
-    """Display user extractions page"""
-    st.title("My Extractions")
-    
-    # Get user extractions from MongoDB
-    try:
-        extractions = get_user_extractions(st.session_state.user_name)
-        
-        if extractions:
-            companies = extractions.get("companies", [])
-            company_details = extractions.get("company_details", [])
-            
-            # Display extraction statistics
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Company Names Extracted", len(companies))
-            with col2:
-                st.metric("Company Details Extracted", len(company_details))
-            
-            # Display extractions in tabs
-            tab1, tab2 = st.tabs(["Company Names", "Company Details"])
-            
-            with tab1:
-                if companies:
-                    # Create DataFrame for display
-                    companies_df = pd.DataFrame([
-                        {
-                            "Company Name": doc["company_name"],
-                            "Source": doc.get("source_pdf", ""),
-                            "Date": doc.get("created_at", "")
-                        } for doc in companies
-                    ])
-                    
-                    st.dataframe(companies_df, use_container_width=True)
-                    
-                    # Download as CSV option
-                    if st.button("Download Company Names as CSV"):
-                        csv = companies_df.to_csv(index=False)
-                        st.download_button(
-                            label="Click to Download",
-                            data=csv,
-                            file_name="my_extracted_companies.csv",
-                            mime="text/csv"
-                        )
-                else:
-                    st.info("You haven't extracted any company names yet.")
-            
-            with tab2:
-                if company_details:
-                    # Create DataFrame for display
-                    details_df = pd.DataFrame([
-                        {
-                            "Company Name": doc["company_name"],
-                            "Emails": "; ".join(doc.get("emails", [])),
-                            "Phones": "; ".join(doc.get("phones", [])),
-                            "Website": doc.get("website", ""),
-                            "Date": doc.get("created_at", "")
-                        } for doc in company_details
-                    ])
-                    
-                    st.dataframe(details_df, use_container_width=True)
-                    
-                    # Download as CSV option
-                    if st.button("Download Company Details as CSV"):
-                        csv = details_df.to_csv(index=False)
-                        st.download_button(
-                            label="Click to Download",
-                            data=csv,
-                            file_name="my_company_details.csv",
-                            mime="text/csv"
-                        )
-                else:
-                    st.info("You haven't extracted any company details yet.")
-        else:
-            st.info("You don't have any extractions yet. Start by extracting company names from PDFs.")
-    except Exception as e:
-        st.error(f"Error retrieving your extractions: {e}")
-        st.error(traceback.format_exc())
+    # Display the main functionality
+    display_home_page()
 
 def display_home_page():
     """Display the main extraction page"""
@@ -304,8 +165,6 @@ def display_home_page():
                 
                 # Store unique companies in session state
                 st.session_state.extracted_companies = sorted(list(set(all_company_names)))
-                # Also initialize edited companies
-                st.session_state.edited_companies = st.session_state.extracted_companies.copy()
                 # Store CSV path in session state
                 st.session_state.companies_csv_path = csv_path
                 
@@ -335,24 +194,6 @@ def display_home_page():
                     df_all = pd.DataFrame({"Company Name": unique_companies})
                     st.dataframe(df_all)
                     st.success(f"Found {len(unique_companies)} unique company names across all files!")
-                    
-                    # Download button below the results
-                    if st.session_state.companies_csv_path:
-                        with open(st.session_state.companies_csv_path, "r") as file:
-                            csv_data = file.read()
-                        
-                        st.download_button(
-                            label="Download Company List as CSV",
-                            data=csv_data,
-                            file_name="company_list.csv",
-                            mime="text/csv"
-                        )
-                    
-                    # Remove separate MongoDB save button since we auto-save now
-                    # Button to view in preview mode
-                    if st.button("Edit Company Names"):
-                        st.session_state.view_mode = "preview"
-                        st.rerun()
                 
                 with tab2:
                     # Show companies by file
@@ -374,110 +215,20 @@ def display_home_page():
             st.session_state.get_details = True
             st.session_state.view_mode = "details"
             st.rerun()
-    
-    # Preview mode - show editable list of companies
-    elif st.session_state.view_mode == "preview" and st.session_state.extracted_companies:
-        st.subheader("Edit Extracted Companies")
-        st.info(f"Found {len(st.session_state.extracted_companies)} companies. You can edit the list below before getting details.")
-        
-        # Initialize edited companies if needed
-        if not st.session_state.edited_companies:
-            st.session_state.edited_companies = st.session_state.extracted_companies.copy()
-            
-        # Display editable dataframe
-        edited_df = pd.DataFrame({"Company Name": st.session_state.edited_companies})
-        
-        # Create columns for edit area and buttons
-        preview_col1, preview_col2 = st.columns([3, 1])
-        
-        with preview_col1:
-            edited_df = st.data_editor(
-                edited_df,
-                num_rows="dynamic",
-                key="company_editor",
-                use_container_width=True
-            )
-            # Update edited companies in session state
-            st.session_state.edited_companies = edited_df["Company Name"].tolist()
-            
-        with preview_col2:
-            # Button to save changes and create CSV
-            if st.button("Save Changes"):
-                # Update extracted companies
-                st.session_state.extracted_companies = st.session_state.edited_companies
-                
-                # Create new CSV with updated companies
-                csv_path = os.path.join(temp_dir, "companylist.csv")
-                pd.DataFrame({"Company Name": st.session_state.extracted_companies}).to_csv(csv_path, index=False)
-                st.session_state.companies_csv_path = csv_path
-                
-                st.success("Changes saved successfully!")
-                
-                # Automatically save to MongoDB when CSV is created
-                with st.spinner("Saving updated company names to MongoDB..."):
-                    try:
-                        success = save_companies_to_mongodb(
-                            st.session_state.companies_csv_path,
-                            st.session_state.user_name
-                        )
-                        if success:
-                            st.success("Updated company names automatically saved to MongoDB!")
-                        else:
-                            st.error("Failed to save to MongoDB. Check the logs for more details.")
-                    except Exception as e:
-                        error_details = traceback.format_exc()
-                        st.error(f"Error saving to MongoDB: {e}\n\nDetails: {error_details}")
-                
-            # Download button
-            if st.session_state.companies_csv_path:
-                with open(st.session_state.companies_csv_path, "r") as file:
-                    csv_data = file.read()
-                
-                st.download_button(
-                    label="Download CSV",
-                    data=csv_data,
-                    file_name="company_list.csv",
-                    mime="text/csv"
-                )
-                
-            # Button to get company details
-            if st.button("Get Company Details"):
-                st.session_state.get_details = True
-                st.session_state.view_mode = "details"
-                st.rerun()
-            
-            # Button to return to upload mode
-            if st.button("Upload New Files"):
-                st.session_state.view_mode = "upload"
-                st.rerun()
 
     # Show download buttons outside of processing logic if data is available
-    if st.session_state.companies_csv_path or st.session_state.details_csv_path:
+    if st.session_state.details_csv_path:
         st.subheader("Download Previous Results:")
         
-        col1, col2 = st.columns(2)
-        
-        if st.session_state.companies_csv_path:
-            with open(st.session_state.companies_csv_path, "r") as file:
-                csv_data = file.read()
+        with open(st.session_state.details_csv_path, "r", encoding='utf-8') as file:
+            details_csv_data = file.read()
             
-            col1.download_button(
-                label="Download Company List",
-                data=csv_data,
-                file_name="company_list.csv",
-                mime="text/csv"
-            )
-        
-        if st.session_state.details_csv_path:
-            with open(st.session_state.details_csv_path, "r", encoding='utf-8') as file:
-                details_csv_data = file.read()
-                
-            col2.download_button(
-                label="Download Company Details",
-                data=details_csv_data,
-                file_name="company_details.csv",
-                mime="text/csv"
-            )
+        st.download_button(
+            label="Download Company Details",
+            data=details_csv_data,
+            file_name="company_details.csv",
+            mime="text/csv"
+        )
 
     # Process company details section - will run in both "upload" and "details" view modes
     if ('extracted_companies' in st.session_state and st.session_state.extracted_companies and 
@@ -486,8 +237,8 @@ def display_home_page():
         st.session_state.view_mode = "details"
         st.subheader("Getting Company Details")
         
-        # Get unique company names - use the edited companies if available
-        unique_companies = st.session_state.edited_companies if st.session_state.edited_companies else st.session_state.extracted_companies
+        # Get unique company names
+        unique_companies = st.session_state.extracted_companies
         total_companies = len(unique_companies)
         
         # Company count selector
@@ -632,13 +383,8 @@ def display_home_page():
                 # Reset the get_details flag
                 st.session_state.get_details = False
                 
-                # Add buttons to return to other views
-                col1, col2 = st.columns(2)
-                if col1.button("Edit Companies"):
-                    st.session_state.view_mode = "preview"
-                    st.rerun()
-                
-                if col2.button("Upload New Files"):
+                # Add button to return to upload view
+                if st.button("Upload New Files"):
                     st.session_state.view_mode = "upload"
                     st.rerun()
             else:
@@ -649,7 +395,7 @@ def display_home_page():
             # If not confirmed yet, show a button to go back
             if st.button("Cancel"):
                 st.session_state.get_details = False
-                st.session_state.view_mode = "preview"
+                st.session_state.view_mode = "upload"
                 st.rerun()
 
 if __name__ == "__main__":
