@@ -169,19 +169,21 @@ def display_home_page():
                 st.session_state.companies_csv_path = csv_path
                 
                 # Automatically save to MongoDB when CSV is created
-                with st.spinner("Saving company names to MongoDB..."):
+                with st.spinner(""):
                     try:
                         success = save_companies_to_mongodb(
                             st.session_state.companies_csv_path,
                             st.session_state.user_name
                         )
                         if success:
-                            st.success("Company names automatically saved to MongoDB!")
+                            # Don't show success message
+                            pass
                         else:
-                            st.error("Failed to save to MongoDB. Check the logs for more details.")
+                            # Don't show error message
+                            pass
                     except Exception as e:
-                        error_details = traceback.format_exc()
-                        st.error(f"Error saving to MongoDB: {e}\n\nDetails: {error_details}")
+                        # Don't show error details
+                        pass
                 
                 # Display aggregated results in tabs
                 st.subheader("Extracted Company Names:")
@@ -270,9 +272,6 @@ def display_home_page():
         selected_count = count_mapping[selected_count_label]
         st.session_state.company_count = selected_count
         
-        # Show info with selected count
-        st.info(f"Processing {selected_count} companies with priority to Indian companies.")
-        
         # Confirm button 
         process_confirmed = st.button("Confirm and Process")
         
@@ -289,13 +288,17 @@ def display_home_page():
             
             # Get company details using Google Maps API
             with st.spinner(f"Getting details for {selected_count} companies..."):
-                company_details = get_company_details(processing_companies, status_callback=update_status)
+                company_details, db_companies_list = get_company_details(processing_companies, status_callback=update_status)
             
             if company_details:
                 # Check which companies have websites but no emails
                 websites_to_scrape = {}
                 for company, details in company_details.items():
-                    if details.get('website') and not details.get('emails'):
+                    # Only add to scraping list if:
+                    # 1. The company has a website
+                    # 2. The company doesn't have emails yet
+                    # 3. The company is NOT from the database (skip DB companies completely)
+                    if details.get('website') and not details.get('emails') and company not in db_companies_list:
                         websites_to_scrape[company] = details.get('website')
                 
                 # If there are websites to scrape
@@ -303,32 +306,47 @@ def display_home_page():
                     with st.spinner("Scraping emails from websites..."):
                         status_text.text("Scraping emails from company websites. This may take a moment...")
                         
-                        # Scrape emails from websites
+                        # Create filtered dictionary with only websites that need scraping
+                        filtered_websites_to_scrape = {}
                         for company, website in websites_to_scrape.items():
-                            if website.startswith('http'):
-                                try:
-                                    status_text.text(f"Scraping emails from {website}...")
-                                    emails = scrape_emails_with_selenium(website)
-                                    if emails:
-                                        company_details[company]['emails'] = emails
-                                        status_text.text(f"Found {len(emails)} email(s) for {company}")
-                                    else:
-                                        status_text.text(f"No emails found for {company}")
-                                except Exception as e:
-                                    status_text.text(f"Error scraping emails from {website}: {str(e)}")
-                            else:
-                                # Try adding https:// prefix if not present
-                                try:
-                                    full_url = f"https://{website}"
-                                    status_text.text(f"Scraping emails from {full_url}...")
-                                    emails = scrape_emails_with_selenium(full_url)
-                                    if emails:
-                                        company_details[company]['emails'] = emails
-                                        status_text.text(f"Found {len(emails)} email(s) for {company}")
-                                    else:
-                                        status_text.text(f"No emails found for {company}")
-                                except Exception as e:
-                                    status_text.text(f"Error scraping emails from {full_url}: {str(e)}")
+                            # Skip email scraping if:
+                            # 1. Company already has emails in the database
+                            # 2. Company is in the database companies list (completely skip DB companies)
+                            if (company in company_details and company_details[company].get('emails') and len(company_details[company]['emails']) > 0) or \
+                               company in db_companies_list:
+                                # Don't show DB references in status text
+                                continue
+                            filtered_websites_to_scrape[company] = website
+                        
+                        # Only proceed with scraping if there are websites left to scrape
+                        if filtered_websites_to_scrape:
+                            # Scrape emails from websites
+                            for company, website in filtered_websites_to_scrape.items():
+                                if website.startswith('http'):
+                                    try:
+                                        status_text.text(f"Scraping emails from {website}...")
+                                        emails = scrape_emails_with_selenium(website)
+                                        if emails:
+                                            company_details[company]['emails'] = emails
+                                            status_text.text(f"Found {len(emails)} email(s) for {company}")
+                                        else:
+                                            status_text.text(f"No emails found for {company}")
+                                    except Exception as e:
+                                        status_text.text(f"Error scraping emails from {website}: {str(e)}")
+                                else:
+                                    # Try adding https:// prefix if not present
+                                    try:
+                                        full_url = f"https://{website}"
+                                        status_text.text(f"Scraping emails from {full_url}...")
+                                        emails = scrape_emails_with_selenium(full_url)
+                                        if emails:
+                                            company_details[company]['emails'] = emails
+                                            status_text.text(f"Found {len(emails)} email(s) for {company}")
+                                        else:
+                                            status_text.text(f"No emails found for {company}")
+                                    except Exception as e:
+                                        status_text.text(f"Error scraping emails from {full_url}: {str(e)}")
+                        # Don't display any message about skipping due to database
                 
                 # Create a DataFrame for display
                 details_rows = []
@@ -355,19 +373,21 @@ def display_home_page():
                 st.session_state.details_csv_path = details_csv_path
                 
                 # Automatically save company details to MongoDB
-                with st.spinner("Saving company details to MongoDB..."):
+                with st.spinner(""):
                     try:
                         success = save_company_details_to_mongodb(
                             details_csv_path,
                             st.session_state.user_name
                         )
                         if success:
-                            st.success("Company details automatically saved to MongoDB!")
+                            # Don't show success message
+                            pass
                         else:
-                            st.error("Failed to save details to MongoDB. Check the logs for more details.")
+                            # Don't show error message
+                            pass
                     except Exception as e:
-                        error_details = traceback.format_exc()
-                        st.error(f"Error saving details to MongoDB: {e}\n\nDetails: {error_details}")
+                        # Don't show error details
+                        pass
                 
                 # Provide download button below results
                 with open(details_csv_path, "r", encoding='utf-8') as file:

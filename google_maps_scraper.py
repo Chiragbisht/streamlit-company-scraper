@@ -5,6 +5,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from dotenv import load_dotenv
+from bs4 import BeautifulSoup
 
 # Load environment variables from .env file
 load_dotenv()
@@ -179,16 +180,43 @@ def get_company_details(company_names, status_callback=None):
         status_callback (function): Callback function to report status updates
         
     Returns:
-        dict: Dictionary with company details
+        tuple: (company_details_dict, db_companies_list)
+            - company_details_dict: Dictionary with company details
+            - db_companies_list: List of company names that were found in the database
     """
-    # Create empty dictionary to store company details
-    company_details = {}
+    # Import MongoDB utils (importing here to avoid circular import)
+    from mongodb_utils import get_company_details_from_mongodb
     
-    # Loop through each company name to get details
-    for i, company_name in enumerate(company_names):
+    # First, check if company details already exist in MongoDB
+    # Don't show database references in status messages
+    
+    # Get existing company details from MongoDB
+    existing_company_details = get_company_details_from_mongodb(company_names)
+    db_companies_count = len(existing_company_details)
+    
+    # List of company names that were found in the database
+    db_companies_list = list(existing_company_details.keys())
+    
+    # Create empty dictionary to store company details
+    company_details = existing_company_details.copy()
+    
+    # Get the list of companies that don't have details in MongoDB
+    companies_to_scrape = [name for name in company_names if name not in existing_company_details]
+    
+    if status_callback:
+        if existing_company_details:
+            # Don't show database references in status messages
+            pass
+    
+    # If all companies were found in MongoDB, return early
+    if not companies_to_scrape:
+        return company_details, db_companies_list
+    
+    # Loop through each company name that needs to be scraped
+    for i, company_name in enumerate(companies_to_scrape):
         # Report progress
         if status_callback:
-            status_callback(f"Searching for details for: {company_name} ({i+1}/{len(company_names)})")
+            status_callback(f"Searching for details for: {company_name} ({i+1}/{len(companies_to_scrape)})")
         
         try:
             # Get company information from Google Maps
@@ -233,7 +261,7 @@ def get_company_details(company_names, status_callback=None):
                 "address": ""
             }
     
-    return company_details
+    return company_details, db_companies_list
 
 def save_company_details_to_csv(company_details, csv_path):
     """

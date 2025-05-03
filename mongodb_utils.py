@@ -297,6 +297,67 @@ def save_company_details_to_mongodb(csv_path, user_name):
         print(traceback.format_exc())
         return False
 
+def get_company_details_from_mongodb(company_names):
+    """
+    Get company details from MongoDB for a list of company names
+    
+    Args:
+        company_names (list): List of company names
+        
+    Returns:
+        dict: Dictionary with company details for the companies found in the database,
+              with company names as keys
+    """
+    try:
+        # Don't log database operations
+        
+        # Connect to MongoDB
+        db = get_mongodb_connection()
+        if db is None:
+            print("Connection failed. Cannot proceed.")
+            return {}
+        
+        # Get the company_details collection
+        details_collection = db["company_details"]
+        
+        # Initialize the results dictionary
+        company_details = {}
+        
+        # Find company details for each company name
+        for company_name in company_names:
+            # Query MongoDB for company details
+            document = details_collection.find_one({"company_name": company_name})
+            
+            if document:
+                # If company details exist in MongoDB, format and add to results
+                if "_id" in document:
+                    document["_id"] = str(document["_id"])
+                
+                # Extract the relevant details
+                emails = document.get("emails", [])
+                phones = document.get("phones", [])
+                website = document.get("website", "")
+                address = document.get("address", "")
+                
+                # Store in results dictionary
+                company_details[company_name] = {
+                    "emails": emails,
+                    "phones": phones,
+                    "website": website,
+                    "address": address
+                }
+                
+                # Don't log data completeness or database operations
+        
+        # Don't log special messages about database operations
+        
+        return company_details
+            
+    except Exception as e:
+        print(f"Error getting company details: {e}")
+        print(traceback.format_exc())
+        return {}
+
 # Run a test connection if this file is executed directly
 if __name__ == "__main__":
     print("Testing MongoDB connection...")
