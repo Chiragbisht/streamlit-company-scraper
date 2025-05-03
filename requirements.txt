@@ -1,10 +1,10 @@
 streamlit>=1.20.0
 pandas
-google-generativeai
 pypdf
 pillow
 requests
 selenium
 webdriver-manager
 python-dotenv
-pymongo 
+pymongo
+google-generativeai 

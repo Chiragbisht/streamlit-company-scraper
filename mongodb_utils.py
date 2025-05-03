@@ -358,6 +358,47 @@ def get_company_details_from_mongodb(company_names):
         print(traceback.format_exc())
         return {}
 
+def update_company_emails_in_mongodb(company_name, emails):
+    """
+    Update emails for a specific company in MongoDB
+    
+    Args:
+        company_name (str): Name of the company
+        emails (list): List of email addresses
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        print(f"Updating emails for company: {company_name}")
+        
+        # Connect to MongoDB
+        db = get_mongodb_connection()
+        if db is None:
+            print("MongoDB connection failed. Cannot proceed.")
+            return False
+        
+        # Get the company_details collection
+        details_collection = db["company_details"]
+        
+        # Find and update the company document
+        result = details_collection.update_one(
+            {"company_name": company_name},
+            {"$set": {"emails": emails, "updated_at": datetime.now()}}
+        )
+        
+        if result.modified_count > 0:
+            print(f"Updated emails for company: {company_name}")
+            return True
+        else:
+            print(f"No company found with name: {company_name}")
+            return False
+            
+    except Exception as e:
+        print(f"Error updating company emails: {e}")
+        print(traceback.format_exc())
+        return False
+
 # Run a test connection if this file is executed directly
 if __name__ == "__main__":
     print("Testing MongoDB connection...")

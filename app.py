@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from scraper import extract_text_from_pdf, extract_company_names, save_to_csv, load_text_cache, save_text_cache
 from google_maps_scraper import get_company_details, save_company_details_to_csv
 from email_scraper import scrape_emails_with_selenium
-from mongodb_utils import save_companies_to_mongodb, save_company_details_to_mongodb, register_user, get_user_extractions
+from mongodb_utils import save_companies_to_mongodb, save_company_details_to_mongodb, register_user, get_user_extractions, update_company_emails_in_mongodb
 
 # Load environment variables
 load_dotenv()

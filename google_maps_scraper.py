@@ -5,7 +5,6 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from dotenv import load_dotenv
-from bs4 import BeautifulSoup
 
 # Load environment variables from .env file
 load_dotenv()
